@@ -55,10 +55,12 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         let control = uiView.segmentedControl
         control.selectedSegmentTintColor = segmentTintColor(for: uiView.traitCollection)
 
-        // Sync segments when tabs change (count, order, or identity)
-        let currentTabValues = tabs.map(\.value)
-        if currentTabValues != context.coordinator.previousTabValues {
-            context.coordinator.previousTabValues = currentTabValues
+        // Sync segments when tabs change — count, order, identity, OR content.
+        // Titles/icons can carry live data (e.g. per-status counts), so a
+        // content-only change must rebuild too, not just a value change.
+        let currentTabFingerprint = Self.fingerprint(of: tabs)
+        if currentTabFingerprint != context.coordinator.previousTabFingerprint {
+            context.coordinator.previousTabFingerprint = currentTabFingerprint
 
             // Rebuild all segments — configureSegmentContent replaces all
             // injected content views anyway, so incremental patching adds
@@ -119,6 +121,12 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
         }
     }
 
+    /// One string per tab capturing everything a segment renders from — the
+    /// rebuild-needed test in `updateUIView`.
+    static func fingerprint(of tabs: [FabBarTab<Value>]) -> [String] {
+        tabs.map { "\($0.value)|\($0.title)|\($0.systemImage ?? "")|\($0.image ?? "")" }
+    }
+
     private func segmentTintColor(for traitCollection: UITraitCollection) -> UIColor {
         switch traitCollection.userInterfaceStyle {
         case .dark:
@@ -131,11 +139,11 @@ struct FabBarRepresentable<Value: Hashable>: UIViewRepresentable {
     @MainActor
     class Coordinator: NSObject {
         var parent: FabBarRepresentable<Value>
-        var previousTabValues: [Value]
+        var previousTabFingerprint: [String]
 
         init(parent: FabBarRepresentable<Value>) {
             self.parent = parent
-            self.previousTabValues = parent.tabs.map(\.value)
+            self.previousTabFingerprint = FabBarRepresentable.fingerprint(of: parent.tabs)
         }
 
         @objc func tabSelected(_ control: UISegmentedControl) {
