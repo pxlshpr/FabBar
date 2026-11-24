@@ -59,6 +59,13 @@ final class GlassTabBarView: UIView {
         setupViews(action: action)
     }
 
+    private var longPressAction: (() -> Void)?
+
+    @objc private func fabHeld(_ recognizer: UILongPressGestureRecognizer) {
+        guard recognizer.state == .began else { return }
+        longPressAction?()
+    }
+
     private func setupViews(action: FabBarAction) {
         // Add container effect view
         addSubview(containerEffectView)
@@ -81,6 +88,15 @@ final class GlassTabBarView: UIView {
 
         // Store action for button
         fabButton.addAction(UIAction { _ in action.action() }, for: .touchUpInside)
+
+        // A hold, when the action has one. The recogniser cancels the button's own touch as it
+        // fires, so lifting the finger afterwards doesn't also send the tap.
+        if let longPress = action.longPressAction {
+            longPressAction = longPress
+            let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(fabHeld(_:)))
+            recognizer.minimumPressDuration = 0.35
+            fabButton.addGestureRecognizer(recognizer)
+        }
 
         // Extra bottom inset compensates for UISegmentedControl's internal padding,
         // visually centering the content within the glass container.
